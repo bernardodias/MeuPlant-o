@@ -1,0 +1,124 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: locations
+    // Fields:
+    //   - name: string (required)
+    //   - color: string (required)
+    //   - userId: string (required)
+    //
+    // Collection: shifts
+    // Fields:
+    //   - name: string (required)
+    //   - color: string (required)
+    //   - locationId: string (optional)
+    //   - value: number (required)
+    //   - paymentDate: timestamp (optional)
+    //   - status: string (required) - 'pendente', 'realizado', 'pago'
+    //   - startAt: timestamp (required)
+    //   - endAt: timestamp (required)
+    //   - notes: string (optional)
+    //   - userId: string (required)
+    //
+    // Collection: templates
+    // Fields:
+    //   - name: string (required)
+    //   - value: number (required)
+    //   - startTime: string (required) - HH:mm
+    //   - endTime: string (required) - HH:mm
+    //   - color: string (required)
+    //   - userId: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "bernardo.afd@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidLocation(data) {
+      return hasRequiredFields(['name', 'color', 'userId']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.color is string && data.color.matches('^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$') &&
+             data.userId is string;
+    }
+
+    function isValidShift(data) {
+      return hasRequiredFields(['name', 'color', 'value', 'status', 'startAt', 'endAt', 'userId']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.color is string && data.color.matches('^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$') &&
+             data.value is number && data.value >= 0 &&
+             data.status in ['pendente', 'realizado', 'pago'] &&
+             data.startAt is timestamp &&
+             data.endAt is timestamp &&
+             data.userId is string &&
+             (!('locationId' in data) || data.locationId is string) &&
+             (!('paymentDate' in data) || data.paymentDate is timestamp) &&
+             (!('notes' in data) || data.notes is string && data.notes.size() < 1000);
+    }
+
+    function isValidShiftTemplate(data) {
+      return hasRequiredFields(['name', 'value', 'startTime', 'endTime', 'color', 'userId']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.value is number && data.value >= 0 &&
+             data.startTime is string && data.startTime.matches('^([01]?[0-9]|2[0-3]):[0-5][0-9]$') &&
+             data.endTime is string && data.endTime.matches('^([01]?[0-9]|2[0-3]):[0-5][0-9]$') &&
+             data.color is string && data.color.matches('^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$') &&
+             data.userId is string;
+    }
+
+    match /locations/{locationId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidLocation(request.resource.data) && isOwner(request.resource.data.userId);
+      allow update: if isAuthenticated() && isValidLocation(request.resource.data) && isOwner(resource.data.userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /shifts/{shiftId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidShift(request.resource.data) && isOwner(request.resource.data.userId);
+      allow update: if isAuthenticated() && isValidShift(request.resource.data) && isOwner(resource.data.userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /templates/{templateId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidShiftTemplate(request.resource.data) && isOwner(request.resource.data.userId);
+      allow update: if isAuthenticated() && isValidShiftTemplate(request.resource.data) && isOwner(resource.data.userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isAdmin();
+    }
+  }
+}

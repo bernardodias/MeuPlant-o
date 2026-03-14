@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "Location": {
+      "title": "Location",
+      "description": "A place where shifts occur.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the location."
+        },
+        "color": {
+          "type": "string",
+          "description": "Hex color associated with the location."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The user who owns this location."
+        }
+      },
+      "required": ["name", "color", "userId"]
+    },
+    "Shift": {
+      "title": "Shift",
+      "description": "A work shift recorded by the user.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the shift."
+        },
+        "color": {
+          "type": "string",
+          "description": "Hex color for visual identification."
+        },
+        "locationId": {
+          "type": "string",
+          "description": "Reference to a Location entity."
+        },
+        "value": {
+          "type": "number",
+          "description": "Total value of the shift in R$."
+        },
+        "paymentDate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Expected or actual payment date."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pendente", "realizado", "pago"],
+          "description": "Current status of the shift."
+        },
+        "startAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Start date and time of the shift."
+        },
+        "endAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "End date and time of the shift."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional comments or notes."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The user who owns this shift."
+        }
+      },
+      "required": ["name", "color", "value", "status", "startAt", "endAt", "userId"]
+    },
+    "ShiftTemplate": {
+      "title": "ShiftTemplate",
+      "description": "A template for creating recurring shifts.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the template."
+        },
+        "value": {
+          "type": "number",
+          "description": "Default value for shifts created from this template."
+        },
+        "startTime": {
+          "type": "string",
+          "description": "Default start time (HH:mm)."
+        },
+        "endTime": {
+          "type": "string",
+          "description": "Default end time (HH:mm)."
+        },
+        "color": {
+          "type": "string",
+          "description": "Default color for the shift."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The user who owns this template."
+        }
+      },
+      "required": ["name", "value", "startTime", "endTime", "color", "userId"]
+    }
+  },
+  "firestore": {
+    "locations": {
+      "schema": "Location",
+      "description": "Collection of work locations."
+    },
+    "shifts": {
+      "schema": "Shift",
+      "description": "Collection of work shifts."
+    },
+    "templates": {
+      "schema": "ShiftTemplate",
+      "description": "Collection of shift templates."
+    }
+  }
+}
