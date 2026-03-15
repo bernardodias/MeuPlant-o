@@ -24,7 +24,10 @@ import {
   Database,
   Clock,
   Copy,
-  Layers
+  Layers,
+  Mail,
+  Lock,
+  LogIn
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -1437,24 +1440,142 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
-        <motion.div 
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="w-20 h-20 bg-emerald-500 text-slate-950 rounded-[24px] flex items-center justify-center mb-10 shadow-[0_20px_50px_rgba(16,185,129,0.2)]"
-        >
-          <CalendarIcon size={36} strokeWidth={2.5} />
-        </motion.div>
-        <h1 className="text-4xl font-black text-white mb-3 tracking-tighter">Plantonista<span className="text-emerald-500">.</span></h1>
-        <p className="text-slate-500 mb-16 max-w-[240px] leading-relaxed text-sm font-medium">Gestão inteligente de escalas e finanças para profissionais de elite.</p>
-        <button 
-          onClick={login}
-          className="w-full bg-white text-slate-950 font-black uppercase tracking-[0.2em] text-xs py-5 rounded-2xl shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"
-        >
-          <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />
-          Acessar com Google
-        </button>
-        <p className="mt-8 text-[10px] text-slate-700 uppercase tracking-widest font-bold">Versão Profissional 2.0</p>
+      <div className="h-screen w-screen bg-slate-950 flex flex-col lg:grid lg:grid-cols-2 overflow-hidden">
+        {/* Left Side: Visual/Branding */}
+        <div className="hidden lg:flex flex-col justify-between p-16 bg-emerald-500 relative overflow-hidden">
+          <div className="z-10">
+            <motion.h1 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="text-7xl font-black text-slate-950 tracking-tighter leading-[0.9]"
+            >
+              Organize sua<br />carreira médica.
+            </motion.h1>
+            <motion.p 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="mt-8 text-slate-900/70 font-medium max-w-md text-lg leading-relaxed"
+            >
+              A ferramenta definitiva para médicos e profissionais de saúde que buscam excelência na gestão de tempo e finanças.
+            </motion.p>
+          </div>
+          
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="z-10 flex items-center gap-4"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-slate-950 flex items-center justify-center text-emerald-500 shadow-2xl">
+              <CalendarIcon size={24} />
+            </div>
+            <span className="text-slate-950 font-black uppercase tracking-widest text-xs">Meu Plantão v2.0</span>
+          </motion.div>
+
+          {/* Abstract background elements */}
+          <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-slate-950/10 rounded-full blur-3xl" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150%] h-[150%] border-[60px] border-slate-950/5 rounded-full" />
+        </div>
+
+        {/* Right Side: Login Form */}
+        <div className="flex-1 flex flex-col items-center justify-center p-8 lg:p-24 bg-slate-950 relative overflow-y-auto">
+          <div className="w-full max-w-sm z-10 py-12">
+            <div className="flex flex-col items-center text-center mb-10">
+               <motion.div 
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="w-16 h-16 bg-blue-600/20 rounded-2xl flex items-center justify-center text-blue-500 mb-6 shadow-[0_0_30px_rgba(37,99,235,0.2)]"
+              >
+                <CalendarIcon size={32} strokeWidth={1.5} />
+              </motion.div>
+              <h1 className="text-3xl font-black text-white tracking-tighter">Meu Plantão</h1>
+              <p className="text-slate-500 mt-2 text-sm font-medium">Acesse seu painel de plantões</p>
+            </div>
+
+            <button 
+              onClick={login}
+              className="w-full bg-white text-slate-950 font-bold text-sm py-4 rounded-xl shadow-xl flex items-center justify-center gap-3 hover:bg-slate-100 active:scale-[0.98] transition-all group mb-8"
+            >
+              <img src="https://www.google.com/favicon.ico" className="w-4 h-4 group-hover:scale-110 transition-transform" alt="Google" />
+              Entrar com Google
+            </button>
+
+            <div className="flex items-center gap-4 mb-8">
+              <div className="flex-1 h-px bg-white/10" />
+              <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Ou E-mail</span>
+              <div className="flex-1 h-px bg-white/10" />
+            </div>
+
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 ml-1">E-mail</label>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors">
+                    <Mail size={18} />
+                  </div>
+                  <input 
+                    type="email" 
+                    placeholder="seu@email.com"
+                    className="w-full bg-slate-900 border border-white/5 rounded-xl py-4 pl-12 pr-4 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-center px-1">
+                  <label className="text-xs font-bold text-slate-400">Senha</label>
+                  <button className="text-[10px] font-bold text-blue-500 hover:text-blue-400 transition-colors">Esqueceu a senha?</button>
+                </div>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors">
+                    <Lock size={18} />
+                  </div>
+                  <input 
+                    type="password" 
+                    placeholder="••••••••"
+                    className="w-full bg-slate-900 border border-white/5 rounded-xl py-4 pl-12 pr-4 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Mock Cloudflare Turnstile */}
+              <div className="bg-white rounded-lg p-3 flex items-center justify-between shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-white">
+                    <Check size={14} strokeWidth={3} />
+                  </div>
+                  <span className="text-xs font-medium text-slate-900">Sucesso!</span>
+                </div>
+                <div className="flex flex-col items-end">
+                  <div className="flex items-center gap-1">
+                    <img src="https://www.cloudflare.com/favicon.ico" className="w-3 h-3 grayscale" alt="Cloudflare" />
+                    <span className="text-[8px] font-black text-slate-900 uppercase tracking-tighter">Cloudflare</span>
+                  </div>
+                  <div className="flex gap-2 mt-0.5">
+                    <span className="text-[7px] text-slate-500 underline">Privacidade</span>
+                    <span className="text-[7px] text-slate-500 underline">Ajuda</span>
+                  </div>
+                </div>
+              </div>
+
+              <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-[0_10px_20px_rgba(37,99,235,0.3)] flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                <LogIn size={18} />
+                Entrar
+              </button>
+            </div>
+
+            <div className="mt-10 pt-8 border-t border-white/5 text-center">
+              <button className="text-xs font-bold text-blue-500 hover:text-blue-400 transition-colors">
+                Não tem uma conta? Cadastre-se
+              </button>
+            </div>
+          </div>
+
+          {/* Subtle background glow */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 blur-[120px] rounded-full" />
+        </div>
       </div>
     );
   }
