@@ -3,7 +3,7 @@
   "appId": "1:337075575240:web:e853b8ce2e70d3c29e88fd",
   "apiKey": "AIzaSyAreCrnOFr9D-98ZHaFjyHeFSg34xohHR4",
   "authDomain": "meu-plantao-6a285.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-15fc1725-4a5e-441a-932b-50cb8d4aed6b",
+  "firestoreDatabaseId": "(default)",
   "storageBucket": "meu-plantao-6a285.firebasestorage.app",
   "messagingSenderId": "337075575240",
   "measurementId": "G-8F14MWQD5X"
