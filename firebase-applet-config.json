@@ -1,10 +1,10 @@
 {
-  "projectId": "meu-plantao-6a285",
-  "appId": "1:337075575240:web:e853b8ce2e70d3c29e88fd",
-  "apiKey": "AIzaSyAreCrnOFr9D-98ZHaFjyHeFSg34xohHR4",
-  "authDomain": "meu-plantao-6a285.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
-  "storageBucket": "meu-plantao-6a285.firebasestorage.app",
-  "messagingSenderId": "337075575240",
-  "measurementId": "G-8F14MWQD5X"
+  "projectId": "meuplannerfinanceiro",
+  "appId": "1:494885134132:web:f43519bca302555326cf61",
+  "apiKey": "AIzaSyC5l3Z8trvrDjI-9tNj2KpPVnuFjfKNRCs",
+  "authDomain": "meuplannerfinanceiro.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-15fc1725-4a5e-441a-932b-50cb8d4aed6b",
+  "storageBucket": "meuplannerfinanceiro.firebasestorage.app",
+  "messagingSenderId": "494885134132",
+  "measurementId": ""
 }
