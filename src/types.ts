@@ -33,4 +33,4 @@ export interface ShiftTemplate {
   userId: string;
 }
 
-export type ViewType = 'calendar' | 'financial' | 'templates' | 'stats' | 'settings';
+export type ViewType = 'calendar' | 'financial' | 'templates' | 'stats' | 'settings' | 'recovery';

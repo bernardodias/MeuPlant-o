@@ -71,6 +71,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { useAuth } from './AuthContext';
+import { RecoveryPage } from './RecoveryPage';
 import { Shift, Location, ViewType, ShiftStatus, ShiftTemplate } from './types';
 import { cn, formatCurrency } from './lib/utils';
 
@@ -930,7 +931,7 @@ const StatsPage = ({ shifts }: { shifts: Shift[] }) => {
 };
 import * as XLSX from 'xlsx';
 
-const SettingsPage = ({ shifts }: { shifts: Shift[] }) => {
+const SettingsPage = ({ shifts, onOpenRecovery }: { shifts: Shift[], onOpenRecovery: () => void }) => {
   const { user, logout } = useAuth();
   const [notifications, setNotifications] = useState(true);
   const [weekStart, setWeekStart] = useState('Domingo');
@@ -981,6 +982,7 @@ const SettingsPage = ({ shifts }: { shifts: Shift[] }) => {
     {
       title: "Gestão",
       items: [
+        { label: "Recuperar Dados (Projeto Antigo)", icon: RotateCcw, action: onOpenRecovery },
         { label: "Exportar para Excel", icon: FileSpreadsheet, action: exportToExcel },
         { label: "Limpar Histórico", icon: Trash2, action: clearData },
         { label: "Sincronizar Dados", icon: RotateCcw, action: handleSync }
@@ -1620,7 +1622,12 @@ export default function App() {
           )}
           {activeView === 'settings' && (
             <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
-              <SettingsPage shifts={shifts} />
+              <SettingsPage shifts={shifts} onOpenRecovery={() => setActiveView('recovery')} />
+            </motion.div>
+          )}
+          {activeView === 'recovery' && (
+            <motion.div key="recovery" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
+              <RecoveryPage userId={user?.uid || ''} onBack={() => setActiveView('settings')} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -1693,7 +1700,9 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      <BottomNav activeView={activeView} onViewChange={setActiveView} />
+      {activeView !== 'recovery' && (
+        <BottomNav activeView={activeView} onViewChange={setActiveView} />
+      )}
     </div>
   );
 }
