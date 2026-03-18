@@ -1663,7 +1663,10 @@ export default function App() {
       .channel('shifts-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts', filter: `user_id=eq.${user.id}` }, (payload) => {
         if (payload.eventType === 'INSERT') {
-          setShifts(prev => [payload.new as Shift, ...prev]);
+          setShifts(prev => {
+            if (prev.some(s => s.id === payload.new.id)) return prev;
+            return [payload.new as Shift, ...prev];
+          });
         } else if (payload.eventType === 'UPDATE') {
           setShifts(prev => prev.map(s => s.id === payload.new.id ? payload.new as Shift : s));
         } else if (payload.eventType === 'DELETE') {
@@ -1676,7 +1679,10 @@ export default function App() {
       .channel('templates-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'templates', filter: `user_id=eq.${user.id}` }, (payload) => {
         if (payload.eventType === 'INSERT') {
-          setTemplates(prev => [...prev, payload.new as ShiftTemplate]);
+          setTemplates(prev => {
+            if (prev.some(t => t.id === payload.new.id)) return prev;
+            return [...prev, payload.new as ShiftTemplate];
+          });
         } else if (payload.eventType === 'UPDATE') {
           setTemplates(prev => prev.map(t => t.id === payload.new.id ? payload.new as ShiftTemplate : t));
         } else if (payload.eventType === 'DELETE') {
@@ -1689,7 +1695,10 @@ export default function App() {
       .channel('locations-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'locations', filter: `user_id=eq.${user.id}` }, (payload) => {
         if (payload.eventType === 'INSERT') {
-          setLocations(prev => [...prev, payload.new as Location]);
+          setLocations(prev => {
+            if (prev.some(l => l.id === payload.new.id)) return prev;
+            return [...prev, payload.new as Location];
+          });
         } else if (payload.eventType === 'UPDATE') {
           setLocations(prev => prev.map(l => l.id === payload.new.id ? payload.new as Location : l));
         } else if (payload.eventType === 'DELETE') {
@@ -1738,16 +1747,29 @@ export default function App() {
       const { id, ...saveData } = data as any;
       
       if (editingShift?.id) {
-        const { error } = await supabase
+        const { data: updatedShift, error } = await supabase
           .from('shifts')
           .update(saveData)
-          .eq('id', editingShift.id);
+          .eq('id', editingShift.id)
+          .select()
+          .single();
         if (error) throw error;
+        if (updatedShift) {
+          setShifts(prev => prev.map(s => s.id === updatedShift.id ? updatedShift as Shift : s));
+        }
       } else {
-        const { error } = await supabase
+        const { data: newShift, error } = await supabase
           .from('shifts')
-          .insert({ ...saveData, user_id: user.id });
+          .insert({ ...saveData, user_id: user.id })
+          .select()
+          .single();
         if (error) throw error;
+        if (newShift) {
+          setShifts(prev => {
+            if (prev.some(s => s.id === newShift.id)) return prev;
+            return [newShift as Shift, ...prev];
+          });
+        }
       }
       setIsShiftFormOpen(false);
       setEditingShift(undefined);
@@ -1775,6 +1797,7 @@ export default function App() {
         .delete()
         .eq('id', id);
       if (error) throw error;
+      setShifts(prev => prev.filter(s => s.id !== id));
       setIsShiftFormOpen(false);
       setEditingShift(undefined);
       setDeleteConfirmation(null);
@@ -1798,11 +1821,16 @@ export default function App() {
     }
 
     try {
-      const { error } = await supabase
+      const { data: updatedShift, error } = await supabase
         .from('shifts')
         .update({ status: newStatus })
-        .eq('id', shift.id);
+        .eq('id', shift.id)
+        .select()
+        .single();
       if (error) throw error;
+      if (updatedShift) {
+        setShifts(prev => prev.map(s => s.id === updatedShift.id ? updatedShift as Shift : s));
+      }
     } catch (error) {
       console.error("Error toggling status:", error);
       handleSupabaseError(error, 'update', `shifts/${shift.id}`);
@@ -1822,10 +1850,19 @@ export default function App() {
     }
 
     try {
-      const { error } = await supabase
+      const { data: newTemplate, error } = await supabase
         .from('templates')
-        .insert({ ...data, user_id: user.id });
+        .insert({ ...data, user_id: user.id })
+        .select()
+        .single();
+      
       if (error) throw error;
+      if (newTemplate) {
+        setTemplates(prev => {
+          if (prev.some(t => t.id === newTemplate.id)) return prev;
+          return [...prev, newTemplate as ShiftTemplate];
+        });
+      }
     } catch (error) {
       console.error("Error saving template:", error);
       handleSupabaseError(error, 'write', 'templates');
@@ -1847,6 +1884,7 @@ export default function App() {
         .delete()
         .eq('id', id);
       if (error) throw error;
+      setTemplates(prev => prev.filter(t => t.id !== id));
       setDeleteConfirmation(null);
     } catch (error) {
       console.error("Error deleting template:", error);
@@ -1867,10 +1905,18 @@ export default function App() {
     }
 
     try {
-      const { error } = await supabase
+      const { data: newLocation, error } = await supabase
         .from('locations')
-        .insert({ name, color, user_id: user.id });
+        .insert({ name, color, user_id: user.id })
+        .select()
+        .single();
       if (error) throw error;
+      if (newLocation) {
+        setLocations(prev => {
+          if (prev.some(l => l.id === newLocation.id)) return prev;
+          return [...prev, newLocation as Location];
+        });
+      }
     } catch (error) {
       console.error("Error saving location:", error);
       handleSupabaseError(error, 'write', 'locations');
@@ -1892,6 +1938,7 @@ export default function App() {
         .delete()
         .eq('id', id);
       if (error) throw error;
+      setLocations(prev => prev.filter(l => l.id !== id));
       setDeleteConfirmation(null);
     } catch (error) {
       console.error("Error deleting location:", error);
@@ -1908,11 +1955,16 @@ export default function App() {
     }
 
     try {
-      const { error } = await supabase
+      const { data: updatedProfile, error } = await supabase
         .from('profiles')
         .update(data)
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .select()
+        .single();
       if (error) throw error;
+      if (updatedProfile) {
+        setProfile(updatedProfile);
+      }
     } catch (error) {
       console.error("Error updating profile:", error);
       handleSupabaseError(error, 'update', 'profiles');
@@ -1952,7 +2004,7 @@ export default function App() {
           </div>
           <h2 className="text-2xl font-black text-white mb-4 tracking-tight">Configuração Necessária</h2>
           <p className="text-slate-400 text-sm mb-8 leading-relaxed">
-            As credenciais do Supabase não foram encontradas. Por favor, configure as seguintes variáveis de ambiente no AI Studio:
+            As credenciais do Supabase não foram encontradas. Por favor, configure as seguintes variáveis de ambiente no seu provedor de hospedagem (Vercel, Netlify, etc) ou no AI Studio:
           </p>
           <div className="space-y-3 mb-10">
             <div className="bg-slate-950 p-4 rounded-2xl border border-white/5 text-left">
