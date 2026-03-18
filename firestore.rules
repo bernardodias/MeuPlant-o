@@ -120,5 +120,9 @@ service cloud.firestore {
       allow read: if isOwner(userId) || isAdmin();
       allow create, update: if isAdmin();
     }
+
+    match /_connection_test/{docId} {
+      allow read: if true;
+    }
   }
 }

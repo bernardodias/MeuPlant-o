@@ -1,12 +1,17 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
-import { auth } from './firebase';
+import { User } from '@supabase/supabase-js';
+import { supabase, isSupabaseConfigured } from './supabase';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  isDemoMode: boolean;
   login: () => Promise<void>;
+  loginWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string) => Promise<void>;
+  enterDemoMode: () => void;
   logout: () => Promise<void>;
+  isConfigured: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -14,26 +19,94 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isDemoMode, setIsDemoMode] = useState(() => localStorage.getItem('demo_mode') === 'true');
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    if (isDemoMode) {
+      setUser({ id: 'demo-user', email: 'demo@meuplantao.com' } as any);
+      setLoading(false);
+      return;
+    }
+
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
       setLoading(false);
     });
-    return unsubscribe;
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async () => {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin
+      }
+    });
+    if (error) throw error;
+  };
+
+  const loginWithEmail = async (email: string, password: string) => {
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) throw error;
+  };
+
+  const signUpWithEmail = async (email: string, password: string) => {
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+    if (error) throw error;
+  };
+
+  const enterDemoMode = () => {
+    setIsDemoMode(true);
+    localStorage.setItem('demo_mode', 'true');
+    setUser({ id: 'demo-user', email: 'demo@meuplantao.com' } as any);
   };
 
   const logout = async () => {
-    await signOut(auth);
+    if (isDemoMode) {
+      setIsDemoMode(false);
+      localStorage.removeItem('demo_mode');
+      setUser(null);
+      return;
+    }
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      isDemoMode,
+      login, 
+      loginWithEmail, 
+      signUpWithEmail, 
+      enterDemoMode,
+      logout, 
+      isConfigured: isSupabaseConfigured 
+    }}>
       {children}
     </AuthContext.Provider>
   );

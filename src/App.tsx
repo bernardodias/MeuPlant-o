@@ -27,7 +27,8 @@ import {
   Layers,
   Mail,
   Lock,
-  LogIn
+  LogIn,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -57,19 +58,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { 
-  collection, 
-  query, 
-  where, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  Timestamp,
-  writeBatch
-} from 'firebase/firestore';
-import { db } from './firebase';
+import { supabase } from './supabase';
 import { useAuth } from './AuthContext';
 import { RecoveryPage } from './RecoveryPage';
 import { Shift, Location, ViewType, ShiftStatus, ShiftTemplate } from './types';
@@ -148,7 +137,7 @@ const CalendarPage = ({ shifts, onAddShift, onEditShift, onToggleStatus }: { shi
     setSelectedDate(today);
   };
 
-  const selectedDateShifts = shifts.filter(s => isSameDay(s.startAt.toDate(), selectedDate));
+  const selectedDateShifts = shifts.filter(s => isSameDay(new Date(s.start_at), selectedDate));
 
   return (
     <div className="flex flex-col h-full bg-slate-950 text-slate-100">
@@ -179,7 +168,7 @@ const CalendarPage = ({ shifts, onAddShift, onEditShift, onToggleStatus }: { shi
       {/* Calendar Grid */}
       <div className="grid grid-cols-7 px-4 gap-1">
         {calendarDays.map((day, i) => {
-          const dayShifts = shifts.filter(s => isSameDay(s.startAt.toDate(), day));
+          const dayShifts = shifts.filter(s => isSameDay(new Date(s.start_at), day));
           const isCurrentMonth = isSameMonth(day, monthStart);
           const isSelected = isSameDay(day, selectedDate);
 
@@ -245,7 +234,7 @@ const CalendarPage = ({ shifts, onAddShift, onEditShift, onToggleStatus }: { shi
                   <h3 className="font-bold text-slate-100">{shift.name}</h3>
                   <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
                     <Clock size={12} />
-                    <span>{format(shift.startAt.toDate(), 'HH:mm')} — {format(shift.endAt.toDate(), 'HH:mm')}</span>
+                    <span>{format(new Date(shift.start_at), 'HH:mm')} — {format(new Date(shift.end_at), 'HH:mm')}</span>
                   </div>
                 </div>
                 <div className="text-right">
@@ -283,8 +272,8 @@ const FinancialPage = ({ shifts, onTogglePaid }: { shifts: Shift[], onTogglePaid
   const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
 
   const monthShifts = shifts
-    .filter(s => isSameMonth(s.startAt.toDate(), currentDate))
-    .sort((a, b) => a.startAt.toMillis() - b.startAt.toMillis());
+    .filter(s => isSameMonth(new Date(s.start_at), currentDate))
+    .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
 
   // Totals for the selected month
   const totalPendente = monthShifts.filter(s => s.status === 'pendente').reduce((acc, s) => acc + s.value, 0);
@@ -302,7 +291,7 @@ const FinancialPage = ({ shifts, onTogglePaid }: { shifts: Shift[], onTogglePaid
   let cumulativePago = 0;
 
   const dailyChartData = daysInMonth.map(day => {
-    const dayShifts = monthShifts.filter(s => isSameDay(s.startAt.toDate(), day));
+    const dayShifts = monthShifts.filter(s => isSameDay(new Date(s.start_at), day));
     
     cumulativePendente += dayShifts.filter(s => s.status === 'pendente').reduce((acc, s) => acc + s.value, 0);
     cumulativeRealizado += dayShifts.filter(s => s.status === 'realizado').reduce((acc, s) => acc + s.value, 0);
@@ -499,7 +488,7 @@ const FinancialPage = ({ shifts, onTogglePaid }: { shifts: Shift[], onTogglePaid
                   <h3 className="font-bold text-slate-200 truncate">{shift.name}</h3>
                   <div className="flex items-center gap-2 mt-1">
                     <Clock size={10} className="text-slate-600" />
-                    <p className="text-[10px] font-mono text-slate-500">{format(shift.startAt.toDate(), 'dd MMM, HH:mm')}</p>
+                    <p className="text-[10px] font-mono text-slate-500">{format(new Date(shift.start_at), 'dd MMM, HH:mm')}</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -538,23 +527,23 @@ const TemplatesPage = ({
   onUseTemplate: (template: ShiftTemplate) => void
 }) => {
   const [isAdding, setIsAdding] = useState(false);
-  const [newTemplate, setNewTemplate] = useState<Omit<ShiftTemplate, 'id' | 'userId'>>({
+  const [newTemplate, setNewTemplate] = useState<Omit<ShiftTemplate, 'id' | 'user_id'>>({
     name: '',
     value: 0,
-    startTime: '07:00',
-    endTime: '19:00',
+    start_time: '07:00',
+    end_time: '19:00',
     color: '#3b82f6'
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAddTemplate({ ...newTemplate, userId: '' }); // userId will be set in the main App
+    onAddTemplate({ ...newTemplate, user_id: '' }); // user_id will be set in the main App
     setIsAdding(false);
     setNewTemplate({
       name: '',
       value: 0,
-      startTime: '07:00',
-      endTime: '19:00',
+      start_time: '07:00',
+      end_time: '19:00',
       color: '#3b82f6'
     });
   };
@@ -600,7 +589,7 @@ const TemplatesPage = ({
                   <div>
                     <h3 className="text-lg font-bold text-slate-100">{template.name}</h3>
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">
-                      {template.startTime} — {template.endTime}
+                      {template.start_time} — {template.end_time}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -672,8 +661,8 @@ const TemplatesPage = ({
                     <input 
                       required
                       type="time"
-                      value={newTemplate.startTime}
-                      onChange={e => setNewTemplate({ ...newTemplate, startTime: e.target.value })}
+                      value={newTemplate.start_time}
+                      onChange={e => setNewTemplate({ ...newTemplate, start_time: e.target.value })}
                       className="w-full bg-slate-950 border border-white/5 rounded-2xl p-4 text-slate-100 focus:border-blue-500 outline-none transition-colors"
                     />
                   </div>
@@ -682,8 +671,8 @@ const TemplatesPage = ({
                     <input 
                       required
                       type="time"
-                      value={newTemplate.endTime}
-                      onChange={e => setNewTemplate({ ...newTemplate, endTime: e.target.value })}
+                      value={newTemplate.end_time}
+                      onChange={e => setNewTemplate({ ...newTemplate, end_time: e.target.value })}
                       className="w-full bg-slate-950 border border-white/5 rounded-2xl p-4 text-slate-100 focus:border-blue-500 outline-none transition-colors"
                     />
                   </div>
@@ -747,20 +736,20 @@ const StatsPage = ({ shifts }: { shifts: Shift[] }) => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
 
   // Helper to calculate hours between two timestamps
-  const getHours = (start: Timestamp, end: Timestamp) => {
-    const diff = end.toMillis() - start.toMillis();
+  const getHours = (start: string, end: string) => {
+    const diff = new Date(end).getTime() - new Date(start).getTime();
     return diff / (1000 * 60 * 60);
   };
 
   // Filter shifts for the selected year
-  const yearShifts = shifts.filter(s => s.startAt.toDate().getFullYear() === selectedYear && s.status !== 'pendente');
+  const yearShifts = shifts.filter(s => new Date(s.start_at).getFullYear() === selectedYear && s.status !== 'pendente');
   
   // Monthly data for the chart
   const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   const yearlyData = months.map((m, i) => {
-    const monthShifts = yearShifts.filter(s => s.startAt.toDate().getMonth() === i);
+    const monthShifts = yearShifts.filter(s => new Date(s.start_at).getMonth() === i);
     const earnings = monthShifts.reduce((acc, s) => acc + s.value, 0);
-    const hours = monthShifts.reduce((acc, s) => acc + getHours(s.startAt, s.endAt), 0);
+    const hours = monthShifts.reduce((acc, s) => acc + getHours(s.start_at, s.end_at), 0);
     return {
       name: m,
       earnings,
@@ -770,9 +759,9 @@ const StatsPage = ({ shifts }: { shifts: Shift[] }) => {
   });
 
   // Current month stats
-  const currentMonthShifts = yearShifts.filter(s => s.startAt.toDate().getMonth() === selectedMonth);
+  const currentMonthShifts = yearShifts.filter(s => new Date(s.start_at).getMonth() === selectedMonth);
   const totalEarnings = currentMonthShifts.reduce((acc, s) => acc + s.value, 0);
-  const totalHours = currentMonthShifts.reduce((acc, s) => acc + getHours(s.startAt, s.endAt), 0);
+  const totalHours = currentMonthShifts.reduce((acc, s) => acc + getHours(s.start_at, s.end_at), 0);
   const avgHourlyRate = totalHours > 0 ? totalEarnings / totalHours : 0;
   const shiftCount = currentMonthShifts.length;
 
@@ -780,8 +769,8 @@ const StatsPage = ({ shifts }: { shifts: Shift[] }) => {
   const prevMonth = selectedMonth === 0 ? 11 : selectedMonth - 1;
   const prevYear = selectedMonth === 0 ? selectedYear - 1 : selectedYear;
   const prevMonthShifts = shifts.filter(s => 
-    s.startAt.toDate().getMonth() === prevMonth && 
-    s.startAt.toDate().getFullYear() === prevYear && 
+    new Date(s.start_at).getMonth() === prevMonth && 
+    new Date(s.start_at).getFullYear() === prevYear && 
     s.status !== 'pendente'
   );
   const prevEarnings = prevMonthShifts.reduce((acc, s) => acc + s.value, 0);
@@ -931,8 +920,159 @@ const StatsPage = ({ shifts }: { shifts: Shift[] }) => {
 };
 import * as XLSX from 'xlsx';
 
-const SettingsPage = ({ shifts, onOpenRecovery }: { shifts: Shift[], onOpenRecovery: () => void }) => {
+const LocationsPage = ({ 
+  locations, 
+  onAdd, 
+  onDelete 
+}: { 
+  locations: Location[], 
+  onAdd: (name: string, color: string) => void, 
+  onDelete: (id: string) => void 
+}) => {
+  const [isAdding, setIsAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState('#10b981');
+  const colors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#f97316'];
+
+  const handleAdd = () => {
+    if (!newName) return;
+    onAdd(newName, newColor);
+    setNewName('');
+    setIsAdding(false);
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-slate-950 text-slate-100 overflow-y-auto pb-24">
+      <header className="p-6">
+        <h1 className="text-2xl font-bold tracking-tight">Meus Locais</h1>
+        <p className="text-xs text-slate-500 mt-1">Gerencie os hospitais e clínicas onde você trabalha</p>
+      </header>
+
+      <div className="px-6 space-y-6">
+        <button 
+          onClick={() => setIsAdding(true)}
+          className="w-full flex items-center justify-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-500 font-bold active:scale-95 transition-all"
+        >
+          <Plus size={20} />
+          Novo Local
+        </button>
+
+        {isAdding && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-slate-900/50 border border-white/5 rounded-3xl p-6 space-y-6"
+          >
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-1">Nome do Local</label>
+              <input 
+                type="text" 
+                placeholder="Ex: Hospital Central"
+                className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-1">Cor do Marcador</label>
+              <div className="flex flex-wrap gap-2">
+                {colors.map(color => (
+                  <button
+                    key={color}
+                    onClick={() => setNewColor(color)}
+                    className={cn(
+                      "w-8 h-8 rounded-full transition-all relative",
+                      newColor === color ? "ring-2 ring-white/40 ring-offset-2 ring-offset-slate-900 scale-110" : "opacity-40"
+                    )}
+                    style={{ backgroundColor: color }}
+                  >
+                    {newColor === color && <Check size={14} className="text-white absolute inset-0 m-auto" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={() => setIsAdding(false)}
+                className="flex-1 py-3 text-slate-400 font-bold text-xs uppercase tracking-widest"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleAdd}
+                className="flex-1 py-3 bg-emerald-500 text-slate-950 rounded-xl font-bold text-xs uppercase tracking-widest"
+              >
+                Salvar
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        <div className="space-y-3">
+          {locations.map(loc => (
+            <div 
+              key={loc.id}
+              className="flex items-center justify-between p-4 bg-slate-900/30 border border-white/5 rounded-2xl"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: loc.color }} />
+                <span className="font-bold text-slate-200">{loc.name}</span>
+              </div>
+              <button 
+                onClick={() => onDelete(loc.id)}
+                className="p-2 text-slate-600 hover:text-rose-500 transition-colors"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
+          ))}
+
+          {locations.length === 0 && !isAdding && (
+            <div className="py-20 text-center opacity-20">
+              <MapPin size={48} className="mx-auto mb-4" />
+              <p className="text-sm">Nenhum local cadastrado</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+const SettingsPage = ({ 
+  shifts, 
+  profile,
+  onUpdateProfile,
+  onOpenRecovery, 
+  onOpenLocations 
+}: { 
+  shifts: Shift[], 
+  profile: any,
+  onUpdateProfile: (data: any) => void,
+  onOpenRecovery: () => void,
+  onOpenLocations: () => void
+}) => {
   const { user, logout } = useAuth();
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileData, setProfileData] = useState({
+    full_name: profile?.full_name || '',
+    hourly_rate: profile?.hourly_rate || 0
+  });
+
+  useEffect(() => {
+    if (profile) {
+      setProfileData({
+        full_name: profile.full_name || '',
+        hourly_rate: profile.hourly_rate || 0
+      });
+    }
+  }, [profile]);
+
+  const handleSaveProfile = () => {
+    onUpdateProfile(profileData);
+    setIsEditingProfile(false);
+  };
   const [notifications, setNotifications] = useState(true);
   const [weekStart, setWeekStart] = useState('Domingo');
 
@@ -941,8 +1081,8 @@ const SettingsPage = ({ shifts, onOpenRecovery }: { shifts: Shift[], onOpenRecov
       Nome: s.name,
       Valor: s.value,
       Status: s.status,
-      Início: format(s.startAt.toDate(), 'dd/MM/yyyy HH:mm'),
-      Término: format(s.endAt.toDate(), 'dd/MM/yyyy HH:mm'),
+      Início: format(new Date(s.start_at), 'dd/MM/yyyy HH:mm'),
+      Término: format(new Date(s.end_at), 'dd/MM/yyyy HH:mm'),
       Notas: s.notes
     }));
 
@@ -961,11 +1101,11 @@ const SettingsPage = ({ shifts, onOpenRecovery }: { shifts: Shift[], onOpenRecov
   const clearData = async () => {
     if (!confirm("Isso apagará permanentemente todos os seus plantões. Continuar?")) return;
     try {
-      const batch = writeBatch(db);
-      shifts.forEach(s => {
-        batch.delete(doc(db, 'shifts', s.id));
-      });
-      await batch.commit();
+      const { error } = await supabase
+        .from('shifts')
+        .delete()
+        .eq('user_id', user?.id);
+      if (error) throw error;
       alert("Dados limpos com sucesso.");
     } catch (error) {
       console.error("Erro ao limpar dados:", error);
@@ -976,12 +1116,13 @@ const SettingsPage = ({ shifts, onOpenRecovery }: { shifts: Shift[], onOpenRecov
     {
       title: "Perfil",
       items: [
-        { label: user?.email || "Login", icon: UserIcon, action: () => {} }
+        { label: profile?.full_name || user?.email || "Login", icon: UserIcon, action: () => setIsEditingProfile(true) }
       ]
     },
     {
       title: "Gestão",
       items: [
+        { label: "Meus Locais", icon: MapPin, action: onOpenLocations },
         { label: "Recuperar Dados (Projeto Antigo)", icon: RotateCcw, action: onOpenRecovery },
         { label: "Exportar para Excel", icon: FileSpreadsheet, action: exportToExcel },
         { label: "Limpar Histórico", icon: Trash2, action: clearData },
@@ -1015,6 +1156,50 @@ const SettingsPage = ({ shifts, onOpenRecovery }: { shifts: Shift[], onOpenRecov
       </header>
 
       <div className="px-6 space-y-8">
+        {isEditingProfile && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-900 border border-emerald-500/20 rounded-3xl p-6 space-y-4"
+          >
+            <h3 className="text-sm font-bold text-white">Editar Perfil</h3>
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Nome Completo</label>
+                <input 
+                  type="text"
+                  className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  value={profileData.full_name}
+                  onChange={e => setProfileData({ ...profileData, full_name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor Hora (R$)</label>
+                <input 
+                  type="number"
+                  className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  value={profileData.hourly_rate}
+                  onChange={e => setProfileData({ ...profileData, hourly_rate: parseFloat(e.target.value) || 0 })}
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button 
+                  onClick={() => setIsEditingProfile(false)}
+                  className="flex-1 py-3 text-xs font-bold text-slate-500 uppercase tracking-widest"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleSaveProfile}
+                  className="flex-1 py-3 bg-emerald-500 text-slate-950 rounded-xl text-xs font-bold uppercase tracking-widest"
+                >
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {sections.map((section, idx) => (
           <div key={idx} className="space-y-3">
             <h2 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em] px-1">{section.title}</h2>
@@ -1074,14 +1259,16 @@ const ShiftForm = ({
   onSave,
   onDelete,
   defaultDate,
-  templates = []
+  templates = [],
+  locations = []
 }: { 
   shift?: Partial<Shift>, 
   onClose: () => void, 
   onSave: (data: Partial<Shift>) => void,
   onDelete?: (id: string) => void,
   defaultDate?: Date,
-  templates?: ShiftTemplate[]
+  templates?: ShiftTemplate[],
+  locations?: Location[]
 }) => {
   const getInitialDates = () => {
     const start = defaultDate ? new Date(defaultDate) : new Date();
@@ -1103,8 +1290,8 @@ const ShiftForm = ({
     color: '#10b981',
     value: 0,
     status: 'pendente',
-    startAt: Timestamp.fromDate(initialDates.start),
-    endAt: Timestamp.fromDate(initialDates.end),
+    start_at: initialDates.start.toISOString(),
+    end_at: initialDates.end.toISOString(),
     notes: ''
   });
 
@@ -1116,29 +1303,29 @@ const ShiftForm = ({
   ];
 
   const handleSave = () => {
-    if (!formData.name || !formData.startAt || !formData.endAt) return;
+    if (!formData.name || !formData.start_at || !formData.end_at) return;
     onSave(formData);
   };
 
   const applyTemplate = (template: ShiftTemplate) => {
-    const baseDate = formData.startAt?.toDate() || defaultDate || new Date();
-    const [startH, startM] = template.startTime.split(':').map(Number);
-    const [endH, endM] = template.endTime.split(':').map(Number);
+    const baseDate = formData.start_at ? new Date(formData.start_at) : defaultDate || new Date();
+    const [startH, startM] = template.start_time.split(':').map(Number);
+    const [endH, endM] = template.end_time.split(':').map(Number);
     
-    const startAt = new Date(baseDate);
-    startAt.setHours(startH, startM, 0, 0);
+    const start_at = new Date(baseDate);
+    start_at.setHours(startH, startM, 0, 0);
     
-    const endAt = new Date(baseDate);
-    endAt.setHours(endH, endM, 0, 0);
-    if (endAt < startAt) endAt.setDate(endAt.getDate() + 1);
+    const end_at = new Date(baseDate);
+    end_at.setHours(endH, endM, 0, 0);
+    if (end_at < start_at) end_at.setDate(end_at.getDate() + 1);
 
     setFormData({
       ...formData,
       name: template.name,
       value: template.value,
       color: template.color,
-      startAt: Timestamp.fromDate(startAt),
-      endAt: Timestamp.fromDate(endAt)
+      start_at: start_at.toISOString(),
+      end_at: end_at.toISOString()
     });
   };
 
@@ -1178,7 +1365,7 @@ const ShiftForm = ({
                 >
                   <div className="w-2 h-2 rounded-full mb-2" style={{ backgroundColor: t.color }} />
                   <p className="text-xs font-bold text-slate-200 truncate">{t.name}</p>
-                  <p className="text-[9px] text-slate-500 mt-1">{t.startTime} - {t.endTime}</p>
+                  <p className="text-[9px] text-slate-500 mt-1">{t.start_time} - {t.end_time}</p>
                 </button>
               ))}
             </div>
@@ -1196,6 +1383,26 @@ const ShiftForm = ({
               value={formData.name}
               onChange={e => setFormData({ ...formData, name: e.target.value })}
             />
+          </div>
+        </div>
+
+        {/* Localização */}
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-1">Localização</label>
+          <div className="relative">
+            <select 
+              className="w-full bg-slate-900/50 border border-white/5 rounded-2xl px-5 py-4 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500/50 transition-all appearance-none"
+              value={formData.location_id || ''}
+              onChange={e => setFormData({ ...formData, location_id: e.target.value || undefined })}
+            >
+              <option value="">Selecione um local (opcional)</option>
+              {locations.map(loc => (
+                <option key={loc.id} value={loc.id}>{loc.name}</option>
+              ))}
+            </select>
+            <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+              <MapPin size={18} />
+            </div>
           </div>
         </div>
 
@@ -1250,8 +1457,8 @@ const ShiftForm = ({
               <input 
                 type="datetime-local"
                 className="w-full bg-transparent text-slate-100 font-mono text-sm focus:outline-none"
-                value={format(formData.startAt?.toDate() || new Date(), "yyyy-MM-dd'T'HH:mm")}
-                onChange={e => setFormData({ ...formData, startAt: Timestamp.fromDate(new Date(e.target.value)) })}
+                value={format(new Date(formData.start_at || new Date()), "yyyy-MM-dd'T'HH:mm")}
+                onChange={e => setFormData({ ...formData, start_at: new Date(e.target.value).toISOString() })}
               />
             </div>
             <div className="p-4 space-y-2">
@@ -1262,8 +1469,8 @@ const ShiftForm = ({
               <input 
                 type="datetime-local"
                 className="w-full bg-transparent text-slate-100 font-mono text-sm focus:outline-none"
-                value={format(formData.endAt?.toDate() || new Date(), "yyyy-MM-dd'T'HH:mm")}
-                onChange={e => setFormData({ ...formData, endAt: Timestamp.fromDate(new Date(e.target.value)) })}
+                value={format(new Date(formData.end_at || new Date()), "yyyy-MM-dd'T'HH:mm")}
+                onChange={e => setFormData({ ...formData, end_at: new Date(e.target.value).toISOString() })}
               />
             </div>
           </div>
@@ -1317,120 +1524,439 @@ const ShiftForm = ({
 // --- Main App ---
 
 export default function App() {
-  const { user, loading, login } = useAuth();
+  const { user, loading, isDemoMode, login, loginWithEmail, signUpWithEmail, enterDemoMode, isConfigured } = useAuth();
   const [activeView, setActiveView] = useState<ViewType>('calendar');
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [profile, setProfile] = useState<any>(null);
   const [isShiftFormOpen, setIsShiftFormOpen] = useState(false);
   const [editingShift, setEditingShift] = useState<Shift | undefined>(undefined);
   const [selectedDateForNewShift, setSelectedDateForNewShift] = useState<Date | undefined>(undefined);
 
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string, type: 'shift' | 'template' } | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string, type: 'shift' | 'template' | 'location' } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [adBlockerDetected, setAdBlockerDetected] = useState(false);
+
+  // Login Form State
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setIsAuthLoading(true);
+    try {
+      if (isSignUp) {
+        await signUpWithEmail(email, password);
+        setAuthError("Verifique seu e-mail para confirmar o cadastro!");
+      } else {
+        await loginWithEmail(email, password);
+      }
+    } catch (err: any) {
+      setAuthError(err.message || "Erro na autenticação");
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  // --- Error Handling ---
+  function handleSupabaseError(error: any, operationType: string, path: string | null) {
+    const errMessage = error?.message || String(error);
+    const errInfo = {
+      error: errMessage,
+      authInfo: {
+        user_id: user?.id,
+        email: user?.email,
+      },
+      operationType,
+      path
+    };
+    console.error('Supabase Error: ', JSON.stringify(errInfo));
+    
+    if (errMessage.includes('PGRST301') || errMessage.includes('JWT')) {
+      setError("Erro de autenticação: Por favor, faça login novamente.");
+    } else if (errMessage.includes('Failed to fetch')) {
+      setError("Erro de conexão: Verifique sua internet ou a configuração do Supabase.");
+    } else {
+      setError(`Erro ao salvar dados: ${errMessage}`);
+    }
+  }
 
   useEffect(() => {
     if (!user) return;
 
-    const qShifts = query(collection(db, 'shifts'), where('userId', '==', user.uid));
-    const unsubShifts = onSnapshot(qShifts, (snapshot) => {
-      setShifts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Shift)));
-    }, (error) => {
-      console.error("Firestore Error (shifts):", error);
-    });
+    if (isDemoMode) {
+      const savedShifts = localStorage.getItem('demo_shifts');
+      const savedTemplates = localStorage.getItem('demo_templates');
+      if (savedShifts) setShifts(JSON.parse(savedShifts));
+      if (savedTemplates) setTemplates(JSON.parse(savedTemplates));
+      return;
+    }
 
-    const qTemplates = query(collection(db, 'templates'), where('userId', '==', user.uid));
-    const unsubTemplates = onSnapshot(qTemplates, (snapshot) => {
-      setTemplates(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ShiftTemplate)));
-    }, (error) => {
-      console.error("Firestore Error (templates):", error);
-    });
+    // Fetch Initial Data
+    const fetchData = async () => {
+      try {
+        // Profile
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (!profileError && profileData) {
+          setProfile(profileData);
+        }
+
+        // Shifts
+        const { data: shiftsData, error: shiftsError } = await supabase
+          .from('shifts')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('start_at', { ascending: false });
+        
+        if (shiftsError) throw shiftsError;
+        setShifts(shiftsData || []);
+
+        // Templates
+        const { data: templatesData, error: templatesError } = await supabase
+          .from('templates')
+          .select('*')
+          .eq('user_id', user.id);
+        
+        if (templatesError) throw templatesError;
+        setTemplates(templatesData || []);
+
+        // Locations
+        const { data: locationsData, error: locationsError } = await supabase
+          .from('locations')
+          .select('*')
+          .eq('user_id', user.id);
+        
+        if (locationsError) throw locationsError;
+        setLocations(locationsData || []);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        handleSupabaseError(error, 'read', 'initial_fetch');
+      }
+    };
+
+    fetchData();
+
+    // Subscribe to changes
+    const shiftsChannel = supabase
+      .channel('shifts-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts', filter: `user_id=eq.${user.id}` }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setShifts(prev => [payload.new as Shift, ...prev]);
+        } else if (payload.eventType === 'UPDATE') {
+          setShifts(prev => prev.map(s => s.id === payload.new.id ? payload.new as Shift : s));
+        } else if (payload.eventType === 'DELETE') {
+          setShifts(prev => prev.filter(s => s.id !== payload.old.id));
+        }
+      })
+      .subscribe();
+
+    const templatesChannel = supabase
+      .channel('templates-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'templates', filter: `user_id=eq.${user.id}` }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setTemplates(prev => [...prev, payload.new as ShiftTemplate]);
+        } else if (payload.eventType === 'UPDATE') {
+          setTemplates(prev => prev.map(t => t.id === payload.new.id ? payload.new as ShiftTemplate : t));
+        } else if (payload.eventType === 'DELETE') {
+          setTemplates(prev => prev.filter(t => t.id !== payload.old.id));
+        }
+      })
+      .subscribe();
+
+    const locationsChannel = supabase
+      .channel('locations-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'locations', filter: `user_id=eq.${user.id}` }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setLocations(prev => [...prev, payload.new as Location]);
+        } else if (payload.eventType === 'UPDATE') {
+          setLocations(prev => prev.map(l => l.id === payload.new.id ? payload.new as Location : l));
+        } else if (payload.eventType === 'DELETE') {
+          setLocations(prev => prev.filter(l => l.id !== payload.old.id));
+        }
+      })
+      .subscribe();
+
+    const profileChannel = supabase
+      .channel('profile-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` }, (payload) => {
+        if (payload.eventType === 'UPDATE') {
+          setProfile(payload.new);
+        }
+      })
+      .subscribe();
 
     return () => {
-      unsubShifts();
-      unsubTemplates();
+      supabase.removeChannel(shiftsChannel);
+      supabase.removeChannel(templatesChannel);
+      supabase.removeChannel(locationsChannel);
+      supabase.removeChannel(profileChannel);
     };
   }, [user]);
 
   const handleSaveShift = async (data: Partial<Shift>) => {
     if (!user) return;
-    try {
+
+    if (isDemoMode) {
+      const newShifts = [...shifts];
       if (editingShift?.id) {
-        await updateDoc(doc(db, 'shifts', editingShift.id), { ...data });
+        const index = newShifts.findIndex(s => s.id === editingShift.id);
+        if (index !== -1) newShifts[index] = { ...newShifts[index], ...data };
       } else {
-        await addDoc(collection(db, 'shifts'), { ...data, userId: user.uid });
+        const newShift = { ...data, id: Math.random().toString(36).substr(2, 9), user_id: user.id } as Shift;
+        newShifts.unshift(newShift);
+      }
+      setShifts(newShifts);
+      localStorage.setItem('demo_shifts', JSON.stringify(newShifts));
+      setIsShiftFormOpen(false);
+      setEditingShift(undefined);
+      return;
+    }
+
+    try {
+      const { id, ...saveData } = data as any;
+      
+      if (editingShift?.id) {
+        const { error } = await supabase
+          .from('shifts')
+          .update(saveData)
+          .eq('id', editingShift.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('shifts')
+          .insert({ ...saveData, user_id: user.id });
+        if (error) throw error;
       }
       setIsShiftFormOpen(false);
       setEditingShift(undefined);
       setSelectedDateForNewShift(undefined);
     } catch (error) {
       console.error("Error saving shift:", error);
+      handleSupabaseError(error, 'write', 'shifts');
     }
   };
 
   const handleDeleteShift = async (id: string) => {
+    if (isDemoMode) {
+      const newShifts = shifts.filter(s => s.id !== id);
+      setShifts(newShifts);
+      localStorage.setItem('demo_shifts', JSON.stringify(newShifts));
+      setIsShiftFormOpen(false);
+      setEditingShift(undefined);
+      setDeleteConfirmation(null);
+      return;
+    }
+
     try {
-      await deleteDoc(doc(db, 'shifts', id));
+      const { error } = await supabase
+        .from('shifts')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
       setIsShiftFormOpen(false);
       setEditingShift(undefined);
       setDeleteConfirmation(null);
     } catch (error) {
       console.error("Error deleting shift:", error);
+      handleSupabaseError(error, 'delete', 'shifts');
     }
   };
 
   const handleTogglePaid = async (shift: Shift) => {
+    let newStatus: ShiftStatus = 'pendente';
+    if (shift.status === 'pendente') newStatus = 'realizado';
+    else if (shift.status === 'realizado') newStatus = 'pago';
+    else if (shift.status === 'pago') newStatus = 'pendente';
+
+    if (isDemoMode) {
+      const newShifts = shifts.map(s => s.id === shift.id ? { ...s, status: newStatus } as Shift : s);
+      setShifts(newShifts);
+      localStorage.setItem('demo_shifts', JSON.stringify(newShifts));
+      return;
+    }
+
     try {
-      let newStatus: ShiftStatus = 'pendente';
-      if (shift.status === 'pendente') newStatus = 'realizado';
-      else if (shift.status === 'realizado') newStatus = 'pago';
-      else if (shift.status === 'pago') newStatus = 'pendente';
-      
-      await updateDoc(doc(db, 'shifts', shift.id), { status: newStatus });
+      const { error } = await supabase
+        .from('shifts')
+        .update({ status: newStatus })
+        .eq('id', shift.id);
+      if (error) throw error;
     } catch (error) {
       console.error("Error toggling status:", error);
+      handleSupabaseError(error, 'update', `shifts/${shift.id}`);
     }
   };
 
   const handleSaveTemplate = async (data: Omit<ShiftTemplate, 'id'>) => {
     if (!user) return;
+
+    if (isDemoMode) {
+      const newTemplates = [...templates];
+      const newTemplate = { ...data, id: Math.random().toString(36).substr(2, 9), user_id: user.id } as ShiftTemplate;
+      newTemplates.push(newTemplate);
+      setTemplates(newTemplates);
+      localStorage.setItem('demo_templates', JSON.stringify(newTemplates));
+      return;
+    }
+
     try {
-      await addDoc(collection(db, 'templates'), { ...data, userId: user.uid });
+      const { error } = await supabase
+        .from('templates')
+        .insert({ ...data, user_id: user.id });
+      if (error) throw error;
     } catch (error) {
       console.error("Error saving template:", error);
+      handleSupabaseError(error, 'write', 'templates');
     }
   };
 
   const handleDeleteTemplate = async (id: string) => {
+    if (isDemoMode) {
+      const newTemplates = templates.filter(t => t.id !== id);
+      setTemplates(newTemplates);
+      localStorage.setItem('demo_templates', JSON.stringify(newTemplates));
+      setDeleteConfirmation(null);
+      return;
+    }
+
     try {
-      await deleteDoc(doc(db, 'templates', id));
+      const { error } = await supabase
+        .from('templates')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
       setDeleteConfirmation(null);
     } catch (error) {
       console.error("Error deleting template:", error);
+      handleSupabaseError(error, 'delete', 'templates');
+    }
+  };
+
+  const handleSaveLocation = async (name: string, color: string) => {
+    if (!user) return;
+
+    if (isDemoMode) {
+      const newLocations = [...locations];
+      const newLoc = { id: Math.random().toString(36).substr(2, 9), name, color, user_id: user.id } as Location;
+      newLocations.push(newLoc);
+      setLocations(newLocations);
+      localStorage.setItem('demo_locations', JSON.stringify(newLocations));
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('locations')
+        .insert({ name, color, user_id: user.id });
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error saving location:", error);
+      handleSupabaseError(error, 'write', 'locations');
+    }
+  };
+
+  const handleDeleteLocation = async (id: string) => {
+    if (isDemoMode) {
+      const newLocations = locations.filter(l => l.id !== id);
+      setLocations(newLocations);
+      localStorage.setItem('demo_locations', JSON.stringify(newLocations));
+      setDeleteConfirmation(null);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('locations')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      setDeleteConfirmation(null);
+    } catch (error) {
+      console.error("Error deleting location:", error);
+      handleSupabaseError(error, 'delete', 'locations');
+    }
+  };
+
+  const handleUpdateProfile = async (data: any) => {
+    if (!user) return;
+
+    if (isDemoMode) {
+      setProfile({ ...profile, ...data });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update(data)
+        .eq('id', user.id);
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      handleSupabaseError(error, 'update', 'profiles');
     }
   };
 
   const handleUseTemplate = (template: ShiftTemplate) => {
     const now = new Date();
-    const [startH, startM] = template.startTime.split(':').map(Number);
-    const [endH, endM] = template.endTime.split(':').map(Number);
+    const [startH, startM] = template.start_time.split(':').map(Number);
+    const [endH, endM] = template.end_time.split(':').map(Number);
     
-    const startAt = new Date(now);
-    startAt.setHours(startH, startM, 0, 0);
+    const start_at = new Date(now);
+    start_at.setHours(startH, startM, 0, 0);
     
-    const endAt = new Date(now);
-    endAt.setHours(endH, endM, 0, 0);
-    if (endAt < startAt) endAt.setDate(endAt.getDate() + 1);
+    const end_at = new Date(now);
+    end_at.setHours(endH, endM, 0, 0);
+    if (end_at < start_at) end_at.setDate(end_at.getDate() + 1);
 
     setEditingShift({
       name: template.name,
       value: template.value,
       color: template.color,
       status: 'pendente',
-      startAt: Timestamp.fromDate(startAt),
-      endAt: Timestamp.fromDate(endAt),
+      start_at: start_at.toISOString(),
+      end_at: end_at.toISOString(),
       notes: ''
     } as Shift);
     setIsShiftFormOpen(true);
   };
+
+  if (!isConfigured) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-slate-900 border border-white/10 rounded-[40px] p-10 text-center shadow-2xl">
+          <div className="w-20 h-20 bg-blue-500/10 rounded-3xl flex items-center justify-center mb-8 mx-auto">
+            <Database className="text-blue-500" size={40} />
+          </div>
+          <h2 className="text-2xl font-black text-white mb-4 tracking-tight">Configuração Necessária</h2>
+          <p className="text-slate-400 text-sm mb-8 leading-relaxed">
+            As credenciais do Supabase não foram encontradas. Por favor, configure as seguintes variáveis de ambiente no AI Studio:
+          </p>
+          <div className="space-y-3 mb-10">
+            <div className="bg-slate-950 p-4 rounded-2xl border border-white/5 text-left">
+              <code className="text-[10px] font-mono text-blue-400 break-all">VITE_SUPABASE_URL</code>
+            </div>
+            <div className="bg-slate-950 p-4 rounded-2xl border border-white/5 text-left">
+              <code className="text-[10px] font-mono text-blue-400 break-all">VITE_SUPABASE_ANON_KEY</code>
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold">
+            Consulte o painel do Supabase em Settings &gt; API
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -1510,7 +2036,12 @@ export default function App() {
               <div className="flex-1 h-px bg-white/10" />
             </div>
 
-            <div className="space-y-5">
+            <form onSubmit={handleAuth} className="space-y-5">
+              {authError && (
+                <div className={`p-3 rounded-xl text-xs font-bold text-center ${authError.includes('Verifique') ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                  {authError}
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 ml-1">E-mail</label>
                 <div className="relative group">
@@ -1519,7 +2050,10 @@ export default function App() {
                   </div>
                   <input 
                     type="email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     placeholder="seu@email.com"
+                    required
                     className="w-full bg-slate-900 border border-white/5 rounded-xl py-4 pl-12 pr-4 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all"
                   />
                 </div>
@@ -1528,7 +2062,7 @@ export default function App() {
               <div className="space-y-2">
                 <div className="flex justify-between items-center px-1">
                   <label className="text-xs font-bold text-slate-400">Senha</label>
-                  <button className="text-[10px] font-bold text-blue-500 hover:text-blue-400 transition-colors">Esqueceu a senha?</button>
+                  {!isSignUp && <button type="button" className="text-[10px] font-bold text-blue-500 hover:text-blue-400 transition-colors">Esqueceu a senha?</button>}
                 </div>
                 <div className="relative group">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors">
@@ -1536,7 +2070,10 @@ export default function App() {
                   </div>
                   <input 
                     type="password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
+                    required
                     className="w-full bg-slate-900 border border-white/5 rounded-xl py-4 pl-12 pr-4 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all"
                   />
                 </div>
@@ -1562,15 +2099,39 @@ export default function App() {
                 </div>
               </div>
 
-              <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-[0_10px_20px_rgba(37,99,235,0.3)] flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
-                <LogIn size={18} />
-                Entrar
+              <button 
+                type="submit"
+                disabled={isAuthLoading}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-[0_10px_20px_rgba(37,99,235,0.3)] flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+              >
+                {isAuthLoading ? (
+                  <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <LogIn size={18} />
+                    {isSignUp ? 'Cadastrar' : 'Entrar'}
+                  </>
+                )}
               </button>
-            </div>
+
+              <button 
+                type="button"
+                onClick={enterDemoMode}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-slate-400 font-bold py-4 rounded-xl border border-white/5 flex items-center justify-center gap-2 transition-all active:scale-[0.98] mt-4"
+              >
+                Entrar no Modo de Demonstração
+              </button>
+            </form>
 
             <div className="mt-10 pt-8 border-t border-white/5 text-center">
-              <button className="text-xs font-bold text-blue-500 hover:text-blue-400 transition-colors">
-                Não tem uma conta? Cadastre-se
+              <button 
+                onClick={() => {
+                  setIsSignUp(!isSignUp);
+                  setAuthError(null);
+                }}
+                className="text-xs font-bold text-blue-500 hover:text-blue-400 transition-colors"
+              >
+                {isSignUp ? 'Já tem uma conta? Entre' : 'Não tem uma conta? Cadastre-se'}
               </button>
             </div>
           </div>
@@ -1585,7 +2146,54 @@ export default function App() {
   return (
     <div className="h-screen w-screen bg-slate-950 flex flex-col overflow-hidden selection:bg-emerald-500/30">
       <main className="flex-1 relative overflow-hidden">
-        <AnimatePresence mode="wait">
+        <AnimatePresence>
+        {(error || adBlockerDetected) && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-slate-900 border border-white/10 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center"
+            >
+              <div className="w-16 h-16 bg-rose-500/10 rounded-full flex items-center justify-center mb-6 mx-auto">
+                <AlertCircle className="text-rose-500" size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">
+                {adBlockerDetected ? "Bloqueador Detectado" : "Falha na Conexão"}
+              </h3>
+              <p className="text-slate-400 text-sm mb-8 leading-relaxed">
+                {adBlockerDetected 
+                  ? "Identificamos que um AdBlocker está ativo. Isso impede a conexão com o banco de dados. Por favor, desative-o para este site e recarregue."
+                  : (error?.includes("offline") 
+                      ? "O navegador não consegue se conectar ao servidor do Google. Isso geralmente é causado por um AdBlocker, Firewall ou VPN restritiva." 
+                      : error)}
+              </p>
+              <div className="space-y-3">
+                <button 
+                  onClick={() => {
+                    setError(null);
+                    setAdBlockerDetected(false);
+                    window.location.reload();
+                  }}
+                  className="w-full bg-slate-100 text-slate-950 font-bold py-4 rounded-2xl active:scale-95 transition-all"
+                >
+                  Tentar Novamente
+                </button>
+                <p className="text-[10px] text-slate-500 uppercase tracking-widest">
+                  Dica: Tente usar uma aba anônima.
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait">
           {activeView === 'calendar' && (
             <motion.div key="calendar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
               <CalendarPage 
@@ -1622,12 +2230,33 @@ export default function App() {
           )}
           {activeView === 'settings' && (
             <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
-              <SettingsPage shifts={shifts} onOpenRecovery={() => setActiveView('recovery')} />
+              <SettingsPage 
+                shifts={shifts} 
+                profile={profile}
+                onUpdateProfile={handleUpdateProfile}
+                onOpenRecovery={() => setActiveView('recovery')} 
+                onOpenLocations={() => setActiveView('locations')}
+              />
+            </motion.div>
+          )}
+          {activeView === 'locations' && (
+            <motion.div key="locations" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
+              <LocationsPage 
+                locations={locations} 
+                onAdd={handleSaveLocation} 
+                onDelete={(id) => setDeleteConfirmation({ id, type: 'location' })} 
+              />
+              <button 
+                onClick={() => setActiveView('settings')}
+                className="fixed top-6 left-6 p-2 bg-slate-900/80 backdrop-blur-md rounded-xl border border-white/5 text-slate-400 z-20"
+              >
+                <ArrowLeft size={20} />
+              </button>
             </motion.div>
           )}
           {activeView === 'recovery' && (
             <motion.div key="recovery" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
-              <RecoveryPage userId={user?.uid || ''} onBack={() => setActiveView('settings')} />
+              <RecoveryPage userId={user?.id || ''} onBack={() => setActiveView('settings')} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -1638,6 +2267,7 @@ export default function App() {
               shift={editingShift}
               defaultDate={selectedDateForNewShift}
               templates={templates}
+              locations={locations}
               onClose={() => {
                 setIsShiftFormOpen(false);
                 setEditingShift(undefined);
@@ -1672,7 +2302,9 @@ export default function App() {
                 <p className="text-slate-400 text-sm mb-8 leading-relaxed">
                   {deleteConfirmation.type === 'shift' 
                     ? 'Tem certeza que deseja excluir este plantão? Esta ação não pode ser desfeita.' 
-                    : 'Tem certeza que deseja excluir este template?'}
+                    : deleteConfirmation.type === 'template'
+                    ? 'Tem certeza que deseja excluir este template?'
+                    : 'Tem certeza que deseja excluir este local?'}
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <button 
@@ -1685,8 +2317,10 @@ export default function App() {
                     onClick={() => {
                       if (deleteConfirmation.type === 'shift') {
                         handleDeleteShift(deleteConfirmation.id);
-                      } else {
+                      } else if (deleteConfirmation.type === 'template') {
                         handleDeleteTemplate(deleteConfirmation.id);
+                      } else {
+                        handleDeleteLocation(deleteConfirmation.id);
                       }
                     }}
                     className="py-4 rounded-2xl bg-rose-500 text-white font-bold text-xs uppercase tracking-widest shadow-lg shadow-rose-500/20 active:scale-95 transition-all"
