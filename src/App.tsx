@@ -1563,6 +1563,18 @@ export default function App() {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setAuthError(null);
+    setIsAuthLoading(true);
+    try {
+      await login();
+    } catch (err: any) {
+      setAuthError(err.message || "Erro ao entrar com Google");
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
   // --- Error Handling ---
   function handleSupabaseError(error: any, operationType: string, path: string | null) {
     const errMessage = error?.message || String(error);
@@ -2023,8 +2035,9 @@ export default function App() {
             </div>
 
             <button 
-              onClick={login}
-              className="w-full bg-white text-slate-950 font-bold text-sm py-4 rounded-xl shadow-xl flex items-center justify-center gap-3 hover:bg-slate-100 active:scale-[0.98] transition-all group mb-8"
+              onClick={handleGoogleLogin}
+              disabled={isAuthLoading}
+              className="w-full bg-white text-slate-950 font-bold text-sm py-4 rounded-xl shadow-xl flex items-center justify-center gap-3 hover:bg-slate-100 active:scale-[0.98] transition-all group mb-8 disabled:opacity-50"
             >
               <img src="https://www.google.com/favicon.ico" className="w-4 h-4 group-hover:scale-110 transition-transform" alt="Google" />
               Entrar com Google
