@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Calendar as CalendarIcon, 
   DollarSign, 
@@ -1592,69 +1592,73 @@ export default function App() {
     if (errMessage.includes('PGRST301') || errMessage.includes('JWT')) {
       setError("Erro de autenticação: Por favor, faça login novamente.");
     } else if (errMessage.includes('Failed to fetch')) {
-      setError("Erro de conexão: Verifique sua internet ou a configuração do Supabase.");
+      setAdBlockerDetected(true);
+      setError("O navegador não conseguiu se conectar ao Supabase. Isso geralmente é causado por um Bloqueador de Anúncios (AdBlocker), Firewall corporativo ou falha em Auth Hooks.");
     } else {
-      setError(`Erro ao salvar dados: ${errMessage}`);
+      setError(`Erro no Supabase: ${errMessage}`);
     }
   }
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (!user) return;
 
     if (isDemoMode) {
       const savedShifts = localStorage.getItem('demo_shifts');
       const savedTemplates = localStorage.getItem('demo_templates');
+      const savedLocations = localStorage.getItem('demo_locations');
       if (savedShifts) setShifts(JSON.parse(savedShifts));
       if (savedTemplates) setTemplates(JSON.parse(savedTemplates));
+      if (savedLocations) setLocations(JSON.parse(savedLocations));
       return;
     }
 
-    // Fetch Initial Data
-    const fetchData = async () => {
-      try {
-        // Profile
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        
-        if (!profileError && profileData) {
-          setProfile(profileData);
-        }
-
-        // Shifts
-        const { data: shiftsData, error: shiftsError } = await supabase
-          .from('shifts')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('start_at', { ascending: false });
-        
-        if (shiftsError) throw shiftsError;
-        setShifts(shiftsData || []);
-
-        // Templates
-        const { data: templatesData, error: templatesError } = await supabase
-          .from('templates')
-          .select('*')
-          .eq('user_id', user.id);
-        
-        if (templatesError) throw templatesError;
-        setTemplates(templatesData || []);
-
-        // Locations
-        const { data: locationsData, error: locationsError } = await supabase
-          .from('locations')
-          .select('*')
-          .eq('user_id', user.id);
-        
-        if (locationsError) throw locationsError;
-        setLocations(locationsData || []);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        handleSupabaseError(error, 'read', 'initial_fetch');
+    try {
+      // Profile
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      if (!profileError && profileData) {
+        setProfile(profileData);
       }
-    };
+
+      // Shifts
+      const { data: shiftsData, error: shiftsError } = await supabase
+        .from('shifts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('start_at', { ascending: false });
+      
+      if (shiftsError) throw shiftsError;
+      setShifts(shiftsData || []);
+
+      // Templates
+      const { data: templatesData, error: templatesError } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('user_id', user.id);
+      
+      if (templatesError) throw templatesError;
+      setTemplates(templatesData || []);
+
+      // Locations
+      const { data: locationsData, error: locationsError } = await supabase
+        .from('locations')
+        .select('*')
+        .eq('user_id', user.id);
+      
+      if (locationsError) throw locationsError;
+      setLocations(locationsData || []);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      handleSupabaseError(error, 'read', 'initial_fetch');
+    }
+  }, [user, isDemoMode]);
+
+  useEffect(() => {
+    if (!user || isDemoMode) return;
 
     fetchData();
 
@@ -1722,7 +1726,7 @@ export default function App() {
       supabase.removeChannel(locationsChannel);
       supabase.removeChannel(profileChannel);
     };
-  }, [user]);
+  }, [user, isDemoMode, fetchData]);
 
   const handleSaveShift = async (data: Partial<Shift>) => {
     if (!user) return;
@@ -1743,9 +1747,27 @@ export default function App() {
       return;
     }
 
+    // Optimistic UI Update
+    const tempId = `temp-${Date.now()}`;
+    const { id, ...saveData } = data as any;
+    const optimisticShift = { 
+      ...saveData, 
+      id: editingShift?.id || tempId, 
+      user_id: user.id,
+      created_at: new Date().toISOString()
+    } as Shift;
+
+    if (editingShift?.id) {
+      setShifts(prev => prev.map(s => s.id === editingShift.id ? optimisticShift : s));
+    } else {
+      setShifts(prev => [optimisticShift, ...prev]);
+    }
+
+    setIsShiftFormOpen(false);
+    setEditingShift(undefined);
+    setSelectedDateForNewShift(undefined);
+
     try {
-      const { id, ...saveData } = data as any;
-      
       if (editingShift?.id) {
         const { data: updatedShift, error } = await supabase
           .from('shifts')
@@ -1755,7 +1777,7 @@ export default function App() {
           .single();
         if (error) throw error;
         if (updatedShift) {
-          setShifts(prev => prev.map(s => s.id === updatedShift.id ? updatedShift as Shift : s));
+          setShifts(prev => prev.map(s => s.id === updatedShift.id || s.id === tempId ? updatedShift as Shift : s));
         }
       } else {
         const { data: newShift, error } = await supabase
@@ -1765,17 +1787,13 @@ export default function App() {
           .single();
         if (error) throw error;
         if (newShift) {
-          setShifts(prev => {
-            if (prev.some(s => s.id === newShift.id)) return prev;
-            return [newShift as Shift, ...prev];
-          });
+          setShifts(prev => prev.map(s => s.id === tempId ? newShift as Shift : s));
         }
       }
-      setIsShiftFormOpen(false);
-      setEditingShift(undefined);
-      setSelectedDateForNewShift(undefined);
     } catch (error) {
       console.error("Error saving shift:", error);
+      // Rollback on error
+      fetchData(); 
       handleSupabaseError(error, 'write', 'shifts');
     }
   };
@@ -1791,19 +1809,22 @@ export default function App() {
       return;
     }
 
+    // Optimistic UI Update
+    setShifts(prev => prev.filter(s => s.id !== id));
+    setIsShiftFormOpen(false);
+    setEditingShift(undefined);
+    setDeleteConfirmation(null);
+
     try {
       const { error } = await supabase
         .from('shifts')
         .delete()
         .eq('id', id);
       if (error) throw error;
-      setShifts(prev => prev.filter(s => s.id !== id));
-      setIsShiftFormOpen(false);
-      setEditingShift(undefined);
-      setDeleteConfirmation(null);
     } catch (error) {
       console.error("Error deleting shift:", error);
-      handleSupabaseError(error, 'delete', 'shifts');
+      fetchData(); // Rollback
+      handleSupabaseError(error, 'delete', `shifts/${id}`);
     }
   };
 
@@ -1849,6 +1870,11 @@ export default function App() {
       return;
     }
 
+    // Optimistic UI Update
+    const tempId = `temp-tpl-${Date.now()}`;
+    const optimisticTemplate = { ...data, id: tempId, user_id: user.id } as ShiftTemplate;
+    setTemplates(prev => [...prev, optimisticTemplate]);
+
     try {
       const { data: newTemplate, error } = await supabase
         .from('templates')
@@ -1858,13 +1884,11 @@ export default function App() {
       
       if (error) throw error;
       if (newTemplate) {
-        setTemplates(prev => {
-          if (prev.some(t => t.id === newTemplate.id)) return prev;
-          return [...prev, newTemplate as ShiftTemplate];
-        });
+        setTemplates(prev => prev.map(t => t.id === tempId ? newTemplate as ShiftTemplate : t));
       }
     } catch (error) {
       console.error("Error saving template:", error);
+      fetchData(); // Rollback
       handleSupabaseError(error, 'write', 'templates');
     }
   };
@@ -1878,16 +1902,19 @@ export default function App() {
       return;
     }
 
+    // Optimistic UI Update
+    setTemplates(prev => prev.filter(t => t.id !== id));
+    setDeleteConfirmation(null);
+
     try {
       const { error } = await supabase
         .from('templates')
         .delete()
         .eq('id', id);
       if (error) throw error;
-      setTemplates(prev => prev.filter(t => t.id !== id));
-      setDeleteConfirmation(null);
     } catch (error) {
       console.error("Error deleting template:", error);
+      fetchData(); // Rollback
       handleSupabaseError(error, 'delete', 'templates');
     }
   };
@@ -1904,6 +1931,11 @@ export default function App() {
       return;
     }
 
+    // Optimistic UI Update
+    const tempId = `temp-loc-${Date.now()}`;
+    const optimisticLocation = { id: tempId, name, color, user_id: user.id } as Location;
+    setLocations(prev => [...prev, optimisticLocation]);
+
     try {
       const { data: newLocation, error } = await supabase
         .from('locations')
@@ -1912,13 +1944,11 @@ export default function App() {
         .single();
       if (error) throw error;
       if (newLocation) {
-        setLocations(prev => {
-          if (prev.some(l => l.id === newLocation.id)) return prev;
-          return [...prev, newLocation as Location];
-        });
+        setLocations(prev => prev.map(l => l.id === tempId ? newLocation as Location : l));
       }
     } catch (error) {
       console.error("Error saving location:", error);
+      fetchData(); // Rollback
       handleSupabaseError(error, 'write', 'locations');
     }
   };
@@ -1932,17 +1962,20 @@ export default function App() {
       return;
     }
 
+    // Optimistic UI Update
+    setLocations(prev => prev.filter(l => l.id !== id));
+    setDeleteConfirmation(null);
+
     try {
       const { error } = await supabase
         .from('locations')
         .delete()
         .eq('id', id);
       if (error) throw error;
-      setLocations(prev => prev.filter(l => l.id !== id));
-      setDeleteConfirmation(null);
     } catch (error) {
       console.error("Error deleting location:", error);
-      handleSupabaseError(error, 'delete', 'locations');
+      fetchData(); // Rollback
+      handleSupabaseError(error, 'delete', `locations/${id}`);
     }
   };
 
